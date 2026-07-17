@@ -1,0 +1,108 @@
+Here is the complete, A-to-Z master guide for setting up your project across two devices, completely offline.
+
+(Device A = Your main screen running the Node.js/React app. Device B = The background server running Docker).
+
+PART 1: Prepare Everything on Your Current PC (Requires Internet)
+You need to bundle everything into a USB drive so the new devices won't need the internet at all.
+
+Export the Docker Images: Open a terminal and run this to save Kafka and Zookeeper into a single file:
+bash
+
+
+docker save -o maritime-images.tar confluentinc/cp-kafka:7.4.0 confluentinc/cp-zookeeper:7.4.0
+Download PostgreSQL Installers: Since Device A needs the database offline, go to your web browser and download the Windows .exe installers for PostgreSQL 15 and PostGIS. Save these .exe files to your Desktop.
+Bundle the Project:
+Go to your maritime-tracker folder. Make sure the node_modules folders and your downloaded map tiles are inside.
+Move the maritime-images.tar file into the folder.
+Zip the entire maritime-tracker folder.
+Copy to USB: Copy the zipped maritime-tracker folder and the PostgreSQL .exe installers to your USB drive.
+PART 2: Setup Device B (The Docker Server - Completely Offline)
+Copy Files: Plug in the USB and extract the maritime-tracker folder onto Device B.
+Load the Docker Images: Open a terminal inside the maritime-tracker folder and run:
+bash
+
+
+docker load -i maritime-images.tar
+(Docker now has the images securely stored offline).
+Find Device B's IP Address:
+Open Command Prompt, type ipconfig, and press Enter.
+Write down the IPv4 Address (e.g., 192.168.1.50).
+Update Docker Config:
+Open the docker-compose.yml file on Device B.
+Change the KAFKA_ADVERTISED_LISTENERS line from localhost to the IP you just found:
+yaml
+
+
+KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://192.168.1.50:9092
+Start Docker: In the terminal, start the containers:
+bash
+
+
+docker-compose up -d
+(Docker will use the local images and instantly create the maritime-kafka and maritime-zookeeper containers).
+PART 3: Setup Device A (The Application Server - Completely Offline)
+Copy Files: Plug in the USB and extract the maritime-tracker folder onto Device A.
+Install PostgreSQL:
+Run the PostgreSQL and PostGIS .exe installers you downloaded.
+Setup the Database:
+Open a terminal on Device A and build your tables:
+bash
+
+
+psql -U postgres -c "CREATE DATABASE \"maritime-tracker\";"
+psql -U postgres -d "maritime-tracker" -f database_setup.sql
+Link to Device B:
+Open the .env file inside the maritime-tracker folder on Device A.
+Update the Kafka line to point to Device B's IP address:
+env
+
+
+KAFKA_BROKERS=192.168.1.50:9092
+Start the Backend:
+Open a terminal in the maritime-tracker folder and run:
+bash
+
+
+npm run dev
+Start the Frontend:
+Open a second terminal, type cd frontend, and run:
+bash
+
+
+npm run dev
+
+Ah, I see what you mean! You are saying Device B might already have Kafka and Zookeeper downloaded from some other project, but the image names might be different (like bitnami/kafka instead of confluentinc/cp-kafka).
+
+If that's the case, you do not need to copy any images via USB at all! You can simply tell your docker-compose.yml file to use the images that are already sitting on Device B.
+
+Here is exactly how to do that:
+
+1. Check what images are already on Device B
+Open a terminal on Device B and run:
+
+bash
+
+
+docker images
+This will list everything installed. Look for anything that says kafka or zookeeper and look at the REPOSITORY and TAG columns. (For example, you might see wurstmeister/kafka with tag latest).
+
+2. Update your docker-compose.yml to match
+Once you know what names Device B uses, open your docker-compose.yml file and simply swap out the image: lines to match what Device B already has!
+
+Change this:
+
+yaml
+
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0   <-- Change this line
+    container_name: maritime-zookeeper
+To match whatever you found on Device B, for example:
+
+yaml
+
+
+  zookeeper:
+    image: bitnami/zookeeper:latest          <-- Now using the existing image!
+    container_name: maritime-zookeeper
+(Do the same thing for the Kafka image line).
